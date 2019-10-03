@@ -1,15 +1,3 @@
-/**
- * \brief Example of how to read a file (list of files) using StFemtoEvent classes
- *
- * RunFemtoDstAnalyzer.C is an example of reading STAR FemtoDst format.
- * One can use either FemtoDst file or a list of femtoDst files (inFile.lis or
- * inFile.list) as an input, and preform physics analysis
- *
- * \authors: Grigory Nigmatkulov, Povarov Alexey, Demanov Alexandr
- * \date May 29, 2018
- */
-
-// This is needed for calling standalone classes (not needed on RACF)
 #define _VANILLA_ROOT_
 
 // C++ headers
@@ -17,6 +5,7 @@
 #include <vector>
 #include <iostream>
 #include <fstream> 
+#include <cctype>
 
 // ROOT headers
 #include "TProfile.h"
@@ -38,22 +27,47 @@
 
 // FemtoDst headers
 
-#include "/mnt/pool/1/aspovarov/basov/StFemtoEvent/StFemtoDstReader.h"
-#include "/mnt/pool/1/aspovarov/basov/StFemtoEvent/StFemtoDst.h"
-#include "/mnt/pool/1/aspovarov/basov/StFemtoEvent/StFemtoEvent.h"
-#include "/mnt/pool/1/aspovarov/basov/StFemtoEvent/StFemtoTrack.h"
-#include "/mnt/pool/1/aspovarov/basov/StFemtoEvent/StFemtoV0.h"
-#include "/mnt/pool/1/aspovarov/basov/StFemtoEvent/StFemtoXi.h"
+#include "/home/gomer/STAR/SOFT/StFemtoEvent/StFemtoDstReader.h"
+#include "/home/gomer/STAR/SOFT/StFemtoEvent/StFemtoDst.h"
+#include "/home/gomer/STAR/SOFT/StFemtoEvent/StFemtoEvent.h"
+#include "/home/gomer/STAR/SOFT/StFemtoEvent/StFemtoTrack.h"
+#include "/home/gomer/STAR/SOFT/StFemtoEvent/StFemtoV0.h"
+#include "/home/gomer/STAR/SOFT/StFemtoEvent/StFemtoXi.h"
 
 // Load libraries (for ROOT_VERSTION_CODE >= 393215)
 #if ROOT_VERSION_CODE >= ROOT_VERSION(6,0,0)
-R__LOAD_LIBRARY(/mnt/pool/1/aspovarov/basov/StFemtoEvent/libStFemtoDst)
+R__LOAD_LIBRARY(/home/gomer/STAR/SOFT/StFemtoEvent/libStFemtoDst.so)
 #endif
 
 // Forward declarations
 // Check event and track
-Bool_t isGoodEvent(StFemtoEvent *event, Double_t VtxZcut, Double_t VtxRcut, Double_t VtxYdelta );
-Bool_t isGoodTrack(StFemtoEvent *event, StFemtoTrack *femtoTrack, Double_t DCAcut);
+Bool_t isGoodEvent( StFemtoEvent *event );
+Bool_t isGoodTrack( StFemtoEvent *event, StFemtoTrack *femtoTrack );
+Double_t CalculateInvBeta( StFemtoTrack *femtoTrack, Int_t Npart);
+void setCutValues(const Char_t *evengy, Bool_t useRunQA, Float_t cutVtxZ,
+																												 Float_t cutVtxR,
+								                												 Float_t shiftVtxX,
+								                												 Float_t shiftVtxY,
+								                												 Float_t cutPtL,
+								                												 Float_t cutPtH,
+								                												 Float_t cutNhits,
+								                												 Float_t cutNhitsRatio,
+								                												 Float_t cutEta,
+								                												 Float_t cutDCA);
+void setRunIdFor7GeV();
+void setRunIdFor11GeV();
+void setRunIdFor14GeV();
+void setRunIdFor19GeV();
+void setRunIdFor27GeV();
+void setRunIdFor39GeV();
+
+void setBadRunsListFor7GeV();
+void setBadRunsListFor11GeV();
+void setBadRunsListFor14GeV();
+void setBadRunsListFor19GeV();
+void setBadRunsListFor27GeV();
+void setBadRunsListFor39GeV();
+
 
 const Float_t electron_mass = 0.0005485799;
 const Float_t pion_mass = 0.13957061;
@@ -70,21 +84,66 @@ Double_t mZDCSMDCenterey = 5.53629;
 Double_t mZDCSMDCenterwx = 4.39604;
 Double_t mZDCSMDCenterwy = 5.19968;
 
+Int_t mRunIdBins;
+Int_t mRunIdRange[2];
+std::vector<Int_t> badRuns;
+Float_t mCutVtxZ;
+Float_t mCutVtxR;
+Float_t mShiftVtxX;
+Float_t mShiftVtxY;
+Float_t mCutPtH;
+Float_t mCutPtL;
+Float_t mCutNhits;
+Float_t mCutNhitsRatio;
+Float_t mCutEta;
+Float_t mCutDCA;
+
+
+
 
 
 // inFile - is a name of name.FemtoDst.root file or a name
 //          of a name.lis(t) files that contains a list of
 //          name1.FemtoDst.root files
 //_________________
-void FemtoDstQA(const Char_t *inFile = "st_physics_12150008_raw_4030001.femtoDst.root",
+void FemtoDstQA(const Char_t *inFile = "./14gev/st_physics_15069012_raw_2000008.femtoDst.root",
                 const Char_t *outFileName = "oTest.root",
-                const Char_t *energy = "14GeV") {
+                const Char_t *energy = "14gev",
+                const Char_t *CUTS = "noCuts",
+                const Char_t *useRunQA = "noRunQA",
+                Float_t cutVtxZ = 100.0,
+                Float_t cutVtxR = 2.0,
+                Float_t shiftVtxX = 0.0,
+                Float_t shiftVtxY = 0.87,
+                Float_t cutPtL = 0.1,
+                Float_t cutPtH = 5.0,
+                Float_t cutNhits = 10,
+                Float_t cutNhitsRatio = 0.5,
+                Float_t cutEta = 1.5,
+                Float_t cutDCA = 3.0 ) {
 
   std::cout << "Hi! Lets do some physics, Master!" << std::endl;
 
-  gSystem->Load("/mnt/pool/1/aspovarov/basov/StFemtoEvent/libStFemtoDst.so");
+  Bool_t mCuts = false;
+  Bool_t mUseRunQA = false;
+
+  if( strncmp(CUTS, "Cuts",4) == 0 ) mCuts = true; 
+  if( strncmp(useRunQA, "RunQA",5) == 0 ) mUseRunQA = true;
+
+  setCutValues( energy, mUseRunQA, cutVtxZ,
+																	 cutVtxR,
+								                	 shiftVtxX,
+								                	 shiftVtxY,
+								                	 cutPtL,
+								                	 cutPtH,
+								                	 cutNhits,
+								                	 cutNhitsRatio,
+								                	 cutEta,
+								                	 cutDCA);
+
+  gSystem->Load("/home/gomer/STAR/SOFT/StFemtoEvent/libStFemtoDst.so");
   #if ROOT_VERSION_CODE < ROOT_VERSION(6,0,0)
-  gSystem->Load("/mnt/pool/1/aspovarov/basov/StFemtoEvent/libStFemtoDst.so");
+  gSystem->Load("/home/gomer/STAR/SOFT/StFemtoEvent/libStFemtoDst.so");
   #endif
 
   StFemtoDstReader* femtoReader = new StFemtoDstReader(inFile);
@@ -110,168 +169,16 @@ void FemtoDstQA(const Char_t *inFile = "st_physics_12150008_raw_4030001.femtoDst
 
   std::cout << "Number of events to read: " << events2read << std::endl;
 
-  Int_t runIdBins;
-  Int_t runIdRange[2];
-
-  Double_t VtxZcut;
-  Double_t VtxRcut;
-  Double_t VtxYdelta;
-  Double_t DCAcut;
-
-  std::vector<Int_t> badRuns;
-  Bool_t useRunQA;
-  Bool_t CUTS;
-  //false - RunQA OFF
-  //true - RunQA ON
-
   Int_t c = 9;    // cent9()
   Int_t cent, RunID;
   Double_t Phi, pt, q, SqM;
-
-  if( strncmp(energy, "39GeV",5) == 0) {
-
-    runIdRange[0] = 11095000;
-    runIdRange[1] = 11115000;
-    runIdBins = runIdRange[1] - runIdRange[0];
-
-    VtxZcut = 40.0;
-    VtxRcut = 2.0;
-    VtxYdelta = 0.0;
-    DCAcut = 2.0;
-  
-    CUTS = false;
-    useRunQA = false;
-    badRuns ={11099102, 11099103, 11099104, 11099106, 11099107, 
-    		      11099125, 11100004, 11100005, 11100008, 11100010, 
-    		      11100011, 11100016, 11100020, 11100071, 11101014, 
-    		      11101104, 11102098, 11103009, 11103047, 11103065, 
-    		      11105011, 11105029, 11106026, 11106027, 11106028, 
-    		      11106029, 11106030, 11106040, 11106041, 11107008, 
-    		      11107046, 11107083, 11108040, 11108053, 11108065, 
-    		      11108075, 11109092, 11109102, 11109105, 11109104, 
-    		      11110005, 11110041, 11110042, 11110086};
-
-  }// if( strncmp(energy, "39GeV",5) == 0 )
-
-  if( strncmp(energy, "27GeV",5) == 0 ){
-
-    runIdRange[0] = 12171000;
-    runIdRange[1] = 12180000;
-    runIdBins = runIdRange[1] - runIdRange[0];
-
-    VtxZcut = 70.0;
-    VtxRcut = 2.0;
-    VtxYdelta = 0.0;
-    DCAcut = 2.0;
-    
-    CUTS = false;
-    useRunQA = false;
-    badRuns ={12172049, 12172056, 12173009, 12173018, 12173026, 
-    		      12173053, 12173054, 12173055, 12173056, 12173057, 
-    		      12173072, 12174077, 12174096, 12174109, 12175007, 
-    		      12175030, 12175089, 12176046, 12176047, 12176067, 
-    		      12176069, 12176104, 12178051, 12178093, 12179068, 
-    		      12179083, 12179084, 12179085, 12179086};
-
-  }// if( strncmp( energy, "27GeV",5) == 0 )
-
-  if( strncmp(energy, "19GeV",5) == 0) {
-
-    runIdRange[0] = 12110000;
-    runIdRange[1] = 12123000;
-    runIdBins = runIdRange[1] - runIdRange[0];
-
-    VtxZcut = 70.0;
-    VtxRcut = 2.0;
-    VtxYdelta = 0.0;
-    DCAcut = 2.0;
-    
-    CUTS = false;
-    useRunQA = false;
-    badRuns ={12113081, 12113084, 12114077, 12114079, 12114085,
-              12114088, 12114089, 12114091, 12114094, 12114095,
-              12114097, 12114098, 12114099, 12114100, 12114101,
-              12114102, 12114103, 12114104, 12114110, 12115025,
-              12115026, 12116015, 12116016, 12116063, 12116084,
-              12117009, 12118045, 12119008, 12119009, 12119011,
-              12119015, 12119016, 12119017, 12119019, 12119020,
-              12119021, 12119022, 12119023, 12119024, 12119025,
-              12119027, 12119028, 12119029, 12119030, 12119032,
-              12119035, 12119036, 12119039, 12120018, 12120073};
-
-  }// if( strncmp(energy, "19GeV",5) == 0 )
-
-  if( strncmp(energy, "14GeV",5) == 0 ) {
-
-    runIdRange[0] = 15045000;
-    runIdRange[1] = 15075000;
-    runIdBins = runIdRange[1] - runIdRange[0];
-
-    VtxZcut = 70.0;
-    VtxRcut = 1.0;
-    VtxYdelta = 0.8847;
-    DCAcut = 2.0;
-    
-    CUTS = false; 
-    useRunQA = false;
-    badRuns ={15053027, 15053028, 15053029, 15053034, 15053035,
-              15053048, 15053052, 15053053, 15053054, 15053055,
-              15053056, 15053057, 15054019, 15054053, 15054054,
-              15055018, 15055131, 15055133, 15055134, 15055135,
-              15055136, 15055137, 15055138, 15055139, 15055140,
-              15055141, 15056001, 15056002, 15056003, 15056004,
-              15056005, 15056006, 15056007, 15056008, 15056009,
-              15056113, 15056114, 15056116, 15056117, 15056124,
-              15056125, 15057001, 15057003, 15057004, 15057006,
-              15057007, 15057010, 15057011, 15057013, 15057014,
-              15057018, 15057055, 15057059, 15058006, 15058011,
-              15058018, 15060061, 15060069, 15061001, 15061002,
-              15062006, 15065012, 15065014, 15066008, 15066013,
-              15066017, 15068013, 15068014, 15068016, 15069034,
-              15069036, 15070009, 15070010};
-
-  }// if( strncmp(energy, "14GeV",5) == 0)
-
-  if( strncmp(energy, "11GeV",5) == 0 ) {
-
-    runIdRange[0] = 11145000;
-    runIdRange[1] = 11165000;
-    runIdBins = runIdRange[1] - runIdRange[0];
-
-    VtxZcut=50.0;
-    VtxRcut=2.0;
-    VtxYdelta =0.0;
-    DCAcut=2.0;
-
-    CUTS = false;
-    useRunQA = false;
-    badRuns ={11148001, 11148008, 11148009, 11148010, 11148036,
-              11148055, 11149017, 11149018, 11149040, 11149043,
-              11150017, 11150029, 11151051, 11151057, 11153045,
-              11154026, 11154040, 11154059, 11156036, 11156043,
-              11156044, 11156045, 11157039};
-
-  }// if( strncmp(energy, "11GeV",5) == 0 )
-
-  if(strncmp(energy, "7GeV",4)==0){
-
-    runIdRange[0] = 11110000;
-    runIdRange[1] = 11150000;
-    runIdBins = runIdRange[1] - runIdRange[0];
-
-    VtxZcut=50.0;
-    VtxRcut=2.0;
-    VtxYdelta =0.0;
-    DCAcut=2.0;
-
-  }// if(strncmp(energy, "7GeV",4)==0)
 
   TFile *outFile = new TFile(outFileName, "RECREATE");
 
   // Histogramming
   // Event
   TH1F *hNeventsVsRunId = new TH1F("hNeventsVsRunId", "<Number of events> vs Run number;RunId;<N_{events}>",
-                                    runIdBins, runIdRange[0], runIdRange[1]);
+                                    mRunIdBins, mRunIdRange[0], mRunIdRange[1]);
   Int_t mColor = 1;
   hNeventsVsRunId->SetMarkerStyle(20);    // filled circle
   hNeventsVsRunId->SetMarkerColor(mColor);
@@ -287,6 +194,8 @@ void FemtoDstQA(const Char_t *inFile = "st_physics_12150008_raw_4030001.femtoDst
                              600, -0.5, 599.5);
   TH1D *hGRefMult = new TH1D("hGRefMult","Reference multiplicity of global tracks;gRefMult;Entries",
                              800, -0.5, 799.5);
+
+
   // 2D
   TH2D *hRefMultVsAdcZdcE = new TH2D("hRefMultVsAdcZdcE","Reference multiplicity vs Adc_{ZDCe};N_{RefMult};Adc_{ZDCe}",
                                       600, -0.5, 599.5,400,0.,4000.);
@@ -324,24 +233,24 @@ void FemtoDstQA(const Char_t *inFile = "st_physics_12150008_raw_4030001.femtoDst
 
   // Primary Vertex histogram
   // 1D
-  TH1D *hVtxX = new TH1D("hVtxX","hVtxX;y [cm]; Entries",
+  TH1D *hVtxX = new TH1D("hVtxX","Vertex X;x [cm]; Entries",
                          100,-3.5,3.5);
-  TH1D *hVtxY = new TH1D("hVtxY","hVtxY;y [cm]; Entries",
+  TH1D *hVtxY = new TH1D("hVtxY","Vertex Y;y [cm]; Entries",
                          100,-3.5,3.5);
-  TH1D *hVtxZ = new TH1D("hVtxZ","hVtxZ;z [cm]; Entries",
+  TH1D *hVtxZ = new TH1D("hVtxZ","Vertex Z;z [cm]; Entries",
                          200, -100., 100.);
   // 2D
-  TH2D *hVtxXvsRefMult = new TH2D("hVtxXvsRefMult","hVtxXvsRefMult;x [cm]; RefMult",
+  TH2D *hVtxXvsRefMult = new TH2D("hVtxXvsRefMult","Vertex X vs RefMult;x [cm]; RefMult",
                             70,-3.5,3.5,600, -0.5, 599.5);
-  TH2D *hVtxYvsRefMult = new TH2D("hVtxYvsRefMult","hVtxYvsRefMult;y [cm]; RefMult",
+  TH2D *hVtxYvsRefMult = new TH2D("hVtxYvsRefMult","Vertex Y vs RefMult;y [cm]; RefMult",
                             70,-3.5,3.5,600, -0.5, 599.5);
-  TH2D *hVtxZvsRefMult = new TH2D("hVtxZvsRefMult","hVtxZvsRefMult;z [cm]; RefMult",
+  TH2D *hVtxZvsRefMult = new TH2D("hVtxZvsRefMult","Vertex Z vs RefMult;z [cm]; RefMult",
                             200,-100.,100.,600, -0.5, 599.5);
-  TH2D *hVtxXvsY = new TH2D("hVtxXvsY", "hVtxXvsY;x [cm];y [cm]",
+  TH2D *hVtxXvsY = new TH2D("hVtxXvsY", "Vertex X vs Vertex Y;x [cm];y [cm]",
                             140,-3.5,3.5,140,-3.5,3.5);
-  TH2D *hVtxZvsX = new TH2D("hVtxZvsX", "hVtxZvsX;z [cm];x [cm]",
+  TH2D *hVtxZvsX = new TH2D("hVtxZvsX", "Vertex Z vs Vertex X;z [cm];x [cm]",
                             200, -100., 100.,140,-3.5,3.5);
-  TH2D *hVtxZvsY = new TH2D("hVtxZvsY", "hVtxZvsY;z [cm];y [cm]",
+  TH2D *hVtxZvsY = new TH2D("hVtxZvsY", "Vertex Z vs Vertex Y;z [cm];y [cm]",
                             200, -100., 100.,140,-3.5,3.5);
   TH2D *hVpdVzVsVtxZ = new TH2D("hVpdVzVsVtxZ","VpdVz Vs Vz Vertex position;z_{VPD} [cm];z [cm]",
                                   400.,-100.,100.,400.,-100.,100.);
@@ -377,25 +286,25 @@ void FemtoDstQA(const Char_t *inFile = "st_physics_12150008_raw_4030001.femtoDst
                                      15, -0.5, 14.5);
   TProfile *hEventProfile[10];
   hEventProfile[0] = new TProfile("hEventProfile_0","Profile of refMult;Run ID;<refMult>",
-                                  runIdBins, runIdRange[0], runIdRange[1] );
+                                  mRunIdBins, mRunIdRange[0], mRunIdRange[1] );
   hEventProfile[1] = new TProfile("hEventProfile_1","Profile of TOF tray multiplicity;Run ID;<bTofTrayMultiplicity>",
-                                  runIdBins, runIdRange[0], runIdRange[1] );
+                                  mRunIdBins, mRunIdRange[0], mRunIdRange[1] );
   hEventProfile[2] = new TProfile("hEventProfile_2","Profile of TOF-matched tracks;Run ID;<bTofMatched>",
-                                            runIdBins, runIdRange[0], runIdRange[1] );
+                                            mRunIdBins, mRunIdRange[0], mRunIdRange[1] );
   hEventProfile[3] = new TProfile("hEventProfile_3","Profile of number of primary tracks;Run ID;<nPrimTracks>",
-                                            runIdBins, runIdRange[0], runIdRange[1] );
+                                            mRunIdBins, mRunIdRange[0], mRunIdRange[1] );
   hEventProfile[4] = new TProfile("hEventProfile_4","Profile of number of global tracks;Run ID;<nGlobTracks>",
-                                            runIdBins, runIdRange[0], runIdRange[1] );
+                                            mRunIdBins, mRunIdRange[0], mRunIdRange[1] );
   hEventProfile[5] = new TProfile("hEventProfile_5","Profile of ZDC ADC;Run ID; <ADC_{ZDC}>",
-                                            runIdBins, runIdRange[0], runIdRange[1] );
+                                            mRunIdBins, mRunIdRange[0], mRunIdRange[1] );
   hEventProfile[6] = new TProfile("hEventProfile_6","Profile of BBC ADC;Run ID; <ADC_{BBC}>",
-                                            runIdBins, runIdRange[0], runIdRange[1] );
+                                            mRunIdBins, mRunIdRange[0], mRunIdRange[1] );
   hEventProfile[7] = new TProfile("hEventProfile_7","Profile of primary vertex X position;Run ID; <VtxX> [cm]",
-                                            runIdBins, runIdRange[0], runIdRange[1] );
+                                            mRunIdBins, mRunIdRange[0], mRunIdRange[1] );
   hEventProfile[8] = new TProfile("hEventProfile_8","Profile of primary vertex Y position;Run ID; <VtxY> [cm]",
-                                            runIdBins, runIdRange[0], runIdRange[1] );
+                                            mRunIdBins, mRunIdRange[0], mRunIdRange[1] );
   hEventProfile[9] = new TProfile("hEventProfile_9","Profile of primary vertex Z position;Run ID; <VtxZ> [cm]",
-                                            runIdBins, runIdRange[0], runIdRange[1] );
+                                            mRunIdBins, mRunIdRange[0], mRunIdRange[1] );
   for(int iHist=0; iHist<10; iHist++) {
     Int_t mColor = 1;
     hEventProfile[iHist]->SetMarkerStyle(20);    // filled circle
@@ -467,19 +376,19 @@ void FemtoDstQA(const Char_t *inFile = "st_physics_12150008_raw_4030001.femtoDst
   TH2D *hDedxVsPt[2], *hNSigmaPionVsPt[2], *hNSigmaElectronVsPt[2], *hNSigmaKaonVsPt[2], *hNSigmaProtonVsPt[2];
   const Char_t *PosNeg[] = {"positive","negative"};
   for( Int_t i = 0; i < 2; i++ ) {
-    hDedxVsPt[i] = new TH2D(Form("hDedxVsPt_%i",i),Form("dE/dx vs. p_{T} %s;p_{T} (GeV/c);dE/dx (keV/cm)",PosNeg[i]),
+    hDedxVsPt[i] = new TH2D(Form("hDedxVsPt_%i",i),Form("dE/dx vs. p_{T} (%s particles);p_{T} (GeV/c);dE/dx (keV/cm)",PosNeg[i]),
                                420, 0., 3.1, 600, 0., 15.);
     hNSigmaPionVsPt[i] = new TH2D(Form("hNSigmaPionVsPt_%i",i),
-                                  Form("n#sigma(#pi) vs. p_{T} %s;p_{T} (GeV/c);n#sigma(#pi)",PosNeg[i]),
+                                  Form("n#sigma(#pi) vs. p_{T} (%s particles);p_{T} (GeV/c);n#sigma(#pi)",PosNeg[i]),
                                   420, 0., 3.1, 300, -15., 15.);
     hNSigmaElectronVsPt[i] = new TH2D(Form("hNSigmaElectronVsPt_%i",i),
-                                      Form("n#sigma(e) vs. p_{T} %s;p_{T} (GeV/c);n#sigma(e)",PosNeg[i]),
+                                      Form("n#sigma(e) vs. p_{T} (%s particles);p_{T} (GeV/c);n#sigma(e)",PosNeg[i]),
                                       420, 0., 3.1, 300, -15., 15.);
     hNSigmaKaonVsPt[i] = new TH2D(Form("hNSigmaKaonVsPt_%i",i),
-                                  Form("n#sigma(K) vs. p_{T} %s;p_{T} (GeV/c);n#sigma(K)",PosNeg[i]),
+                                  Form("n#sigma(K) vs. p_{T} (%s particles);p_{T} (GeV/c);n#sigma(K)",PosNeg[i]),
                                   420, 0., 3.1, 300, -15., 15.);
     hNSigmaProtonVsPt[i] = new TH2D(Form("hNSigmaProtonVsPt_%i",i),
-                                    Form("n#sigma(p) vs. p_{T} %s;p_{T} (GeV/c);n#sigma(p)",PosNeg[i]),
+                                    Form("n#sigma(p) vs. p_{T} (%s particles);p_{T} (GeV/c);n#sigma(p)",PosNeg[i]),
                                     420, 0., 3.1, 300, -15., 15.);
   }
 
@@ -533,27 +442,41 @@ void FemtoDstQA(const Char_t *inFile = "st_physics_12150008_raw_4030001.femtoDst
   hDedxVsMassSqr[1] = new TH2D("hDedxVsMassSqr_1","dE/dx vs. mass^{2} charge<0;m^{2} (GeV/c^{2})^{2};dE/dx (keV/cm)",
              440, -0.4, 1.8, 250, 0., 12.5 );
 
-  TH2D *hInvBetaDiffElectronVsPt = new TH2D("hInvBetaDiffElectronVsPt","1/#beta - 1/#beta(electron) vs. charge*p_{T};charge * p_{T} (GeV/c);1/#beta - 1/#beta(e)",
-                                            840, -2.1, 2.1, 200, -0.1, 0.1);
-  TH2D *hInvBetaDiffPionVsPt = new TH2D("hInvBetaDiffPionVsPt","1/#beta - 1/#beta(pion) vs. charge*p_{T};charge * p_{T} (GeV/c);1/#beta - 1/#beta(#pi)",
-                                            840, -2.1, 2.1, 200, -0.1, 0.1);
-  TH2D *hInvBetaDiffKaonVsPt = new TH2D("hInvBetaDiffKaonVsPt","1/#beta - 1/#beta(kaon) vs. charge*p_{T};charge * p_{T} (GeV/c);1/#beta - 1/#beta(K)",
-                                            840, -2.1, 2.1, 200, -0.1, 0.1);
-  TH2D *hInvBetaDiffProtonVsPt = new TH2D("hInvBetaDiffProtonVsPt","1/#beta - 1/#beta(p) vs. charge*p_{T};charge * p_{T} (GeV/c);1/#beta - 1/#beta(p)",
-                                          840, -2.1, 2.1, 200, -0.1, 0.1);
+
+  TH2D *hInvBetaDiffElectronVsPt[2], *hInvBetaDiffPionVsPt[2], *hInvBetaDiffKaonVsPt[2], *hInvBetaDiffProtonVsPt[2];
+  for(Int_t i = 0; i < 2; i++ ) {
+
+	  hInvBetaDiffElectronVsPt[i] = new TH2D(Form("hInvBetaDiffElectronVsPt_%i",i),
+	  Form("1/#beta - 1/#beta(electron) vs. p_{T} (%s particles);p_{T} (GeV/c);1/#beta - 1/#beta(e)", PosNeg[i]),
+	  840, 0.0, 2.1, 200, -0.1, 0.1);
+
+	  hInvBetaDiffPionVsPt[i] = new TH2D(Form("hInvBetaDiffPionVsPt_%i",i),
+	  Form("1/#beta - 1/#beta(pion) vs. p_{T} (%s particles);p_{T} (GeV/c);1/#beta - 1/#beta(#pi)",PosNeg[i]),
+	  840, 0.0, 2.1, 200, -0.1, 0.1);
+
+	  hInvBetaDiffKaonVsPt[i] = new TH2D(Form("hInvBetaDiffKaonVsPt_%i",i),
+	  Form("1/#beta - 1/#beta(kaon) vs. p_{T} (%s particles);p_{T} (GeV/c);1/#beta - 1/#beta(K)",PosNeg[i]),
+	  840, 0.0, 2.1, 200, -0.1, 0.1);
+
+	  hInvBetaDiffProtonVsPt[i] = new TH2D(Form("hInvBetaDiffProtonVsPt_%i",i),
+	  Form("1/#beta - 1/#beta(p) vs. p_{T} (%s particles);p_{T} (GeV/c);1/#beta - 1/#beta(p)", PosNeg[i]),
+	  840, 0.0, 2.1, 200, -0.1, 0.1);
+
+  }
+
   TProfile *hTrackProfile[6];
   hTrackProfile[0] = new TProfile("hTrackProfile_0","Profile of track #phi;Run ID;<#phi>",
-                                           runIdBins, runIdRange[0], runIdRange[1] );
+                                           mRunIdBins, mRunIdRange[0], mRunIdRange[1] );
   hTrackProfile[1] = new TProfile("hTrackProfile_1","Profile of track p_{T};Run ID;<p_{T}>",
-                                           runIdBins, runIdRange[0], runIdRange[1] );
+                                           mRunIdBins, mRunIdRange[0], mRunIdRange[1] );
   hTrackProfile[2] = new TProfile("hTrackProfile_2","Profile of track nHits;Run ID;<nHits>",
-                                          runIdBins, runIdRange[0], runIdRange[1] );
+                                          mRunIdBins, mRunIdRange[0], mRunIdRange[1] );
   hTrackProfile[3] = new TProfile("hTrackProfile_3","Profile of track DCA;Run ID;<DCA>",
-                                          runIdBins, runIdRange[0], runIdRange[1] );
+                                          mRunIdBins, mRunIdRange[0], mRunIdRange[1] );
   hTrackProfile[4] = new TProfile("hTrackProfile_4","Profile of track #beta;Run ID;<#beta>",
-                                             runIdBins, runIdRange[0], runIdRange[1] );
+                                             mRunIdBins, mRunIdRange[0], mRunIdRange[1] );
   hTrackProfile[5] = new TProfile("hTrackProfile_5","Profile of track dE/dx;Run ID;<dE/dx> (keV/cm)",
-                                            runIdBins, runIdRange[0], runIdRange[1] );
+                                            mRunIdBins, mRunIdRange[0], mRunIdRange[1] );
 
   for(int iTrk=0; iTrk<6; iTrk++) {
     Int_t mColor = 1;
@@ -568,10 +491,10 @@ void FemtoDstQA(const Char_t *inFile = "st_physics_12150008_raw_4030001.femtoDst
   for( Int_t i = 0; i < 3; i++) {
     hSinPhi[i] = new TProfile(Form("hSinPhi%i",i+1),
                               Form("Average sin(%i#phi) of Run ID;Run ID; <sin(%i#phi)>",i+1,i+1),
-                              runIdBins, runIdRange[0], runIdRange[1]);
+                              mRunIdBins, mRunIdRange[0], mRunIdRange[1]);
     hCosPhi[i] = new TProfile(Form("hCosPhi%i",i+1),
                               Form("Average cos(%i#phi) of Run ID;Run ID; <cos(%i#phi)>",i+1,i+1),
-                              runIdBins, runIdRange[0], runIdRange[1]);
+                              mRunIdBins, mRunIdRange[0], mRunIdRange[1]);
 
   }
   for( Int_t i = 0; i < 3; i++ ) {
@@ -622,12 +545,13 @@ void FemtoDstQA(const Char_t *inFile = "st_physics_12150008_raw_4030001.femtoDst
     }
 
     // Simple event cut
-    if(CUTS == true && isGoodEvent( event, VtxZcut, VtxRcut, VtxYdelta  ) == false ) continue;
+    if( mCuts == true && isGoodEvent( event ) == false ) continue;
 
     TVector3 pVtx = event->primaryVertex();
             
     //RunQA
-    if( useRunQA == true && std::find(badRuns.begin(), badRuns.end(), event -> runId()) != badRuns.end() ) continue;
+    if( mUseRunQA == true && 
+    		std::find(badRuns.begin(), badRuns.end(), event -> runId()) != badRuns.end() ) continue;
 
   /*////////////////////////////////////////////////////////////////////////////////////////*/
  /*________________________________FILL HISTOGRAMS_________________________________________*/
@@ -724,7 +648,7 @@ void FemtoDstQA(const Char_t *inFile = "st_physics_12150008_raw_4030001.femtoDst
       if ( !femtoTrack->isPrimary() ) continue;
 
       // Simple single-track cut
-      if( CUTS == true && isGoodTrack(event, femtoTrack, DCAcut) == false ) continue;
+      if( mCuts == true && isGoodTrack( event, femtoTrack ) == false ) continue;
 
       hGlobalPtot->Fill( femtoTrack->gMom().Mag() );
       hPrimaryPtot->Fill( femtoTrack->pMom().Mag() );
@@ -830,23 +754,22 @@ void FemtoDstQA(const Char_t *inFile = "st_physics_12150008_raw_4030001.femtoDst
         hNSigmaKaonVsMassSqrt->Fill( femtoTrack->nSigmaKaon(), femtoTrack->massSqr() );
         hNSigmaProtonVsMassSqrt->Fill( femtoTrack->nSigmaProton(), femtoTrack->massSqr() );
 
-        hInvBetaDiffElectronVsPt->Fill( femtoTrack->charge() * femtoTrack->pMom().Pt(),
-                                        femtoTrack->invBeta() - TMath::Sqrt(electron_mass_sqr +
-                                        femtoTrack->pMom().Mag2() )/ femtoTrack->pMom().Mag() );
-        hInvBetaDiffPionVsPt->Fill( femtoTrack->charge() * femtoTrack->pMom().Pt(),
-                                    femtoTrack->invBeta() - TMath::Sqrt(pion_mass_sqr +
-                                    femtoTrack->pMom().Mag2() )/ femtoTrack->pMom().Mag() );
-        hInvBetaDiffKaonVsPt->Fill( femtoTrack->charge() * femtoTrack->pMom().Pt(),
-                                    femtoTrack->invBeta() - TMath::Sqrt(kaon_mass_sqr +
-                                    femtoTrack->pMom().Mag2() )/ femtoTrack->pMom().Mag() );
-        hInvBetaDiffProtonVsPt->Fill( femtoTrack->charge() * femtoTrack->pMom().Pt(),
-                                      femtoTrack->invBeta() - TMath::Sqrt(proton_mass_sqr +
-                                      femtoTrack->pMom().Mag2() )/ femtoTrack->pMom().Mag() );
+  
+        
+
         if ( femtoTrack->charge() > 0 ) {
           hDedxVsMassSqr[0]->Fill( femtoTrack->massSqr(), femtoTrack->dEdx() * 1e6 );
+          hInvBetaDiffElectronVsPt[0]->Fill( femtoTrack->pMom().Pt(), CalculateInvBeta(femtoTrack, 0) );
+	        hInvBetaDiffPionVsPt[0]->Fill( femtoTrack->pMom().Pt(), CalculateInvBeta(femtoTrack, 1) );
+	        hInvBetaDiffKaonVsPt[0]->Fill( femtoTrack->pMom().Pt(), CalculateInvBeta(femtoTrack, 2) );
+	        hInvBetaDiffProtonVsPt[0]->Fill( femtoTrack->pMom().Pt(), CalculateInvBeta(femtoTrack, 3) );
         }
         else {
           hDedxVsMassSqr[1]->Fill( femtoTrack->massSqr(), femtoTrack->dEdx() * 1e6 );
+          hInvBetaDiffElectronVsPt[1]->Fill( femtoTrack->pMom().Pt(), CalculateInvBeta(femtoTrack, 0) );
+	        hInvBetaDiffPionVsPt[1]->Fill( femtoTrack->pMom().Pt(), CalculateInvBeta(femtoTrack, 1) );
+	        hInvBetaDiffKaonVsPt[1]->Fill( femtoTrack->pMom().Pt(), CalculateInvBeta(femtoTrack, 2) );
+	        hInvBetaDiffProtonVsPt[1]->Fill( femtoTrack->pMom().Pt(), CalculateInvBeta(femtoTrack, 3) );
         }
         hTrackProfile[4]->Fill( event->runId(), femtoTrack->beta() );
       } //if( isTofTrack() )
@@ -870,21 +793,73 @@ void FemtoDstQA(const Char_t *inFile = "st_physics_12150008_raw_4030001.femtoDst
  /*___________________________DESCRIPTION OF FUNCTIONS_____________________________________*/
 /*////////////////////////////////////////////////////////////////////////////////////////*/
 
+void setCutValues(const Char_t *energy, Bool_t useRunQA, Float_t cutVtxZ,
+																												 Float_t cutVtxR,
+								                												 Float_t shiftVtxX,
+								                												 Float_t shiftVtxY,
+								                												 Float_t cutPtL,
+								                												 Float_t cutPtH,
+								                												 Float_t cutNhits,
+								                												 Float_t cutNhitsRatio,
+								                												 Float_t cutEta,
+								                												 Float_t cutDCA) {
+	mCutVtxZ = cutVtxZ;
+	mCutVtxR = cutVtxR;
+	mShiftVtxX = shiftVtxX;
+	mShiftVtxY = shiftVtxY;
+	mCutPtL = cutPtL;
+	mCutPtH = cutPtH;
+	mCutNhits = cutNhits;
+	mCutNhitsRatio = cutNhitsRatio;
+	mCutEta = cutEta;
+	mCutDCA = cutDCA;
+
+	if( strncmp(energy, "7gev",4) == 0 ) {
+		setRunIdFor7GeV();
+		if( useRunQA == true ) setBadRunsListFor7GeV();
+	}
+
+	if( strncmp(energy, "11gev",5) == 0 ) {
+		setRunIdFor11GeV();
+		if( useRunQA == true ) setBadRunsListFor11GeV();
+	}
+
+	if( strncmp(energy, "14gev",5) == 0 ) {
+		setRunIdFor14GeV();
+		if( useRunQA == true ) setBadRunsListFor14GeV();
+	}
+
+	if( strncmp(energy, "19gev",5) == 0 ) {
+		setRunIdFor19GeV();
+		if( useRunQA == true ) setBadRunsListFor19GeV();
+	}
+
+	if( strncmp(energy, "27gev",5) == 0 ) {
+		setRunIdFor27GeV();
+		if( useRunQA == true ) setBadRunsListFor27GeV();
+	}
+
+	if( strncmp(energy, "39gev",5) == 0 ) {
+		setRunIdFor39GeV();
+		if( useRunQA == true ) setBadRunsListFor39GeV();
+	}
+
+}
+
 //********************CHECK EVENT ON GOOD********************//
-Bool_t isGoodEvent(StFemtoEvent *event, Double_t VtxZcut, Double_t VtxRcut, Double_t VtxYdelta ) {
+Bool_t isGoodEvent( StFemtoEvent *event ) {
   Bool_t check = true; 
   TVector3 pVtx = event->primaryVertex();
 
   // Reject vertices that are far from the central membrane along the beam
-  if( TMath::Abs( pVtx.Z() ) > VtxZcut ) check = false;
-  //if( sqrt( pow( pVtx.X(), 2) + pow(pVtx.Y() + 0.8847, 2) ) > 1 ) check = false; 14.5
-  if( sqrt( pow( pVtx.X(), 2) + pow(pVtx.Y() + VtxYdelta , 2) ) > VtxRcut ) check = false;
+  if( TMath::Abs( pVtx.Z() ) > mCutVtxZ ) check = false;
+  if( sqrt( pow( pVtx.X() + mShiftVtxX, 2) + pow( pVtx.Y() + mShiftVtxY, 2) ) > mCutVtxR ) check = false;
   
   return check;
 }// isGoodEvent(){}
 
 //********************CHECK TRACK ON GOOD********************//
-Bool_t isGoodTrack(StFemtoEvent *event, StFemtoTrack *femtoTrack, Double_t DCAcut) {
+Bool_t isGoodTrack( StFemtoEvent *event, StFemtoTrack *femtoTrack ) {
   Bool_t check = true;
   TVector3 pVtx = event->primaryVertex();
 
@@ -893,11 +868,135 @@ Bool_t isGoodTrack(StFemtoEvent *event, StFemtoTrack *femtoTrack, Double_t DCAcu
   if ( !femtoTrack->isPrimary() ) check = false;
   if ( ( femtoTrack -> dEdx() ) == 0 ) check = false;
   // Simple single-track cut
-  if( femtoTrack -> gMom().Mag() < 0.1 || femtoTrack -> gDCA(pVtx).Mag() > DCAcut ) check = false;    
-  if( TMath::Abs( femtoTrack -> eta() ) > 1.0 || femtoTrack -> nHits() < 15 || 
-                  femtoTrack -> pt() < 0.2) check = false;
-  if(femtoTrack -> pt() > 2.0) check = false; 
-  if(  ( (Double_t)femtoTrack -> nHits() )/( (Double_t)femtoTrack -> nHitsPoss() )  < 0.52 ) check = false;
+  if( femtoTrack -> gMom().Mag() < 0.1 || femtoTrack -> gDCA(pVtx).Mag() > mCutDCA ) check = false;    
+  if( TMath::Abs( femtoTrack -> eta() ) > mCutEta || femtoTrack -> nHits() < mCutNhits || 
+                  femtoTrack -> pt() < mCutPtL) check = false;
+  if(femtoTrack -> pt() > mCutPtH) check = false; 
+  if(  ( (Double_t)femtoTrack -> nHits() )/( (Double_t)femtoTrack -> nHitsPoss() )  < mCutNhitsRatio ) check = false;
 
   return check; 
 }// isGoodTrack(){}
+
+Double_t CalculateInvBeta( StFemtoTrack *femtoTrack, Int_t Npart) {
+	Double_t InvBeta = 0.0; 
+	Float_t trackBeta = femtoTrack->invBeta();
+	Float_t trackPMag2 = femtoTrack->pMom().Mag2();
+	Float_t trackPMag = femtoTrack->pMom().Mag();
+	// 0 - mass square of electron
+	// 1 - mass square of pion
+	// 2 - mass square of kaon
+	// 3 - mass square of proton
+	Float_t mass_sqr[4] = {0.000000301, 0.019479955, 0.24371698, 0.880354499};
+
+	InvBeta = trackBeta - TMath::Sqrt(mass_sqr[Npart] + trackPMag2 )/ trackPMag;
+
+	return InvBeta;	
+}// CalculateInvBeta(){}
+
+
+void setRunIdFor7GeV() {
+	mRunIdRange[0] = 11110000;
+  mRunIdRange[1] = 11150000;
+  mRunIdBins = mRunIdRange[1] - mRunIdRange[0];
+}
+
+void setRunIdFor11GeV() {
+	mRunIdRange[0] = 11145000;
+  mRunIdRange[1] = 11165000;
+  mRunIdBins = mRunIdRange[1] - mRunIdRange[0];
+}
+
+void setRunIdFor14GeV() {
+	mRunIdRange[0] = 15045000;
+  mRunIdRange[1] = 15075000;
+  mRunIdBins = mRunIdRange[1] - mRunIdRange[0];
+}
+
+void setRunIdFor19GeV() {
+	mRunIdRange[0] = 12110000;
+  mRunIdRange[1] = 12123000;
+  mRunIdBins = mRunIdRange[1] - mRunIdRange[0];
+}
+
+void setRunIdFor27GeV() {
+	mRunIdRange[0] = 12171000;
+  mRunIdRange[1] = 12180000;
+  mRunIdBins = mRunIdRange[1] - mRunIdRange[0];
+}
+
+void setRunIdFor39GeV() {
+	mRunIdRange[0] = 11095000;
+  mRunIdRange[1] = 11115000;
+  mRunIdBins = mRunIdRange[1] - mRunIdRange[0];
+}
+
+void setBadRunsListFor7GeV() {
+
+}
+
+void setBadRunsListFor11GeV() {
+	badRuns ={11148001, 11148008, 11148009, 11148010, 11148036,
+            11148055, 11149017, 11149018, 11149040, 11149043,
+            11150017, 11150029, 11151051, 11151057, 11153045,
+            11154026, 11154040, 11154059, 11156036, 11156043,
+            11156044, 11156045, 11157039};
+}
+
+void setBadRunsListFor14GeV() {
+	//badRuns = {15069012};
+	badRuns ={15053027,15053028,15053029,15053034,15053035,
+						15053052,15053053,15053054,15053055,15053056,
+						15053057,15053058,15053060,15054019,15054031,
+						15054053,15054054,15055018,15055131,15055133,
+						15055134,15055135,15055136,15055137,15055138,
+						15055139,15055140,15055141,15056001,15056002,
+						15056003,15056004,15056005,15056006,15056007,
+						15056008,15056009,15056019,15056023,15056113,
+						15056114,15056116,15056117,15056124,15056125,
+						15057001,15057003,15057004,15057006,15057007,
+						15057010,15057011,15057013,15057014,15057018,
+						15057055,15057059,15058006,15058010,15058011,
+						15058016,15058018,15059011,15059058,15060061,
+						15061001,15061002,15061009,15062006,15065011,
+						15065012,15065013,15065014,15066013,15066017,
+						15066022,15066070,15068013,15068014,15068016,
+						15069034,15069036,15070009,15070010};
+}
+
+void setBadRunsListFor19GeV() {
+	badRuns ={12113081, 12113084, 12114077, 12114079, 12114085,
+            12114088, 12114089, 12114091, 12114094, 12114095,
+            12114097, 12114098, 12114099, 12114100, 12114101,
+            12114102, 12114103, 12114104, 12114110, 12115025,
+            12115026, 12116015, 12116016, 12116063, 12116084,
+            12117009, 12118045, 12119008, 12119009, 12119011,
+            12119015, 12119016, 12119017, 12119019, 12119020,
+            12119021, 12119022, 12119023, 12119024, 12119025,
+            12119027, 12119028, 12119029, 12119030, 12119032,
+            12119035, 12119036, 12119039, 12120018, 12120073};
+
+}
+
+void setBadRunsListFor27GeV() {
+	badRuns ={12172049, 12172056, 12173009, 12173018, 12173026, 
+    		    12173053, 12173054, 12173055, 12173056, 12173057, 
+    		    12173072, 12174077, 12174096, 12174109, 12175007, 
+    		    12175030, 12175089, 12176046, 12176047, 12176067, 
+    		    12176069, 12176104, 12178051, 12178093, 12179068, 
+    		    12179083, 12179084, 12179085, 12179086};
+
+}
+
+void setBadRunsListFor39GeV() {
+	badRuns ={11099102, 11099103, 11099104, 11099106, 11099107, 
+    		    11099125, 11100004, 11100005, 11100008, 11100010, 
+    		    11100011, 11100016, 11100020, 11100071, 11101014, 
+    		    11101104, 11102098, 11103009, 11103047, 11103065, 
+    		    11105011, 11105029, 11106026, 11106027, 11106028, 
+    		    11106029, 11106030, 11106040, 11106041, 11107008, 
+    		    11107046, 11107083, 11108040, 11108053, 11108065, 
+    		    11108075, 11109092, 11109102, 11109105, 11109104, 
+    		    11110005, 11110041, 11110042, 11110086};
+
+}
+
