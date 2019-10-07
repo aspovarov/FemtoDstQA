@@ -100,35 +100,37 @@ Float_t mCutDCA;
 
 
 
-
+//./14gev/st_physics_15069012_raw_2000008.femtoDst.root
 
 // inFile - is a name of name.FemtoDst.root file or a name
 //          of a name.lis(t) files that contains a list of
 //          name1.FemtoDst.root files
 //_________________
-void FemtoDstQA(const Char_t *inFile = "./14gev/st_physics_15069012_raw_2000008.femtoDst.root",
+void FemtoDstQA(const Char_t *inFile = "inFile.root",
                 const Char_t *outFileName = "oTest.root",
                 const Char_t *energy = "14gev",
-                const Char_t *CUTS = "noCuts",
-                const Char_t *useRunQA = "noRunQA",
+                const Bool_t mUseCuts = false,
+  							const Bool_t mUseRunQA = false,
                 Float_t cutVtxZ = 100.0,
-                Float_t cutVtxR = 2.0,
+                Float_t cutVtxR = 4.0,
                 Float_t shiftVtxX = 0.0,
-                Float_t shiftVtxY = 0.87,
+                Float_t shiftVtxY = 0.0,
                 Float_t cutPtL = 0.1,
-                Float_t cutPtH = 5.0,
+                Float_t cutPtH = 10.0,
                 Float_t cutNhits = 10,
                 Float_t cutNhitsRatio = 0.5,
                 Float_t cutEta = 1.5,
-                Float_t cutDCA = 3.0 ) {
+                Float_t cutDCA = 5.0,
+                Float_t nSigmaElectronLow = -2.0, 
+                Float_t nSigmaElectronHigh = 2.0,
+                Float_t nSigmaPionLow = -2.0, 
+                Float_t nSigmaPionHigh = 2.0,
+                Float_t nSigmaKaonLow = -2.0, 
+                Float_t nSigmaKaonHigh = 2.0,
+                Float_t nSigmaProtonLow = -2.0, 
+                Float_t nSigmaProtonHigh = 2.0 ) {
 
   std::cout << "Hi! Lets do some physics, Master!" << std::endl;
-
-  Bool_t mCuts = false;
-  Bool_t mUseRunQA = false;
-
-  if( strncmp(CUTS, "Cuts",4) == 0 ) mCuts = true; 
-  if( strncmp(useRunQA, "RunQA",5) == 0 ) mUseRunQA = true;
 
   setCutValues( energy, mUseRunQA, cutVtxZ,
 																	 cutVtxR,
@@ -545,7 +547,7 @@ void FemtoDstQA(const Char_t *inFile = "./14gev/st_physics_15069012_raw_2000008.
     }
 
     // Simple event cut
-    if( mCuts == true && isGoodEvent( event ) == false ) continue;
+    if( mUseCuts == true && isGoodEvent( event ) == false ) continue;
 
     TVector3 pVtx = event->primaryVertex();
             
@@ -648,7 +650,7 @@ void FemtoDstQA(const Char_t *inFile = "./14gev/st_physics_15069012_raw_2000008.
       if ( !femtoTrack->isPrimary() ) continue;
 
       // Simple single-track cut
-      if( mCuts == true && isGoodTrack( event, femtoTrack ) == false ) continue;
+      if( mUseCuts == true && isGoodTrack( event, femtoTrack ) == false ) continue;
 
       hGlobalPtot->Fill( femtoTrack->gMom().Mag() );
       hPrimaryPtot->Fill( femtoTrack->pMom().Mag() );
@@ -676,25 +678,25 @@ void FemtoDstQA(const Char_t *inFile = "./14gev/st_physics_15069012_raw_2000008.
       hDedx->Fill( femtoTrack->dEdx() * 1e6 );
 
       // If electron has passed PID nsigma cut
-      if ( TMath::Abs( femtoTrack->nSigmaElectron() ) <= 2. ) {
+      if (  nSigmaElectronLow <= femtoTrack->nSigmaElectron() <= nSigmaElectronHigh ) {
         hDedxVsPtPID[0]->Fill( femtoTrack->charge() * femtoTrack->pMom().Pt(),
                                femtoTrack->dEdx() * 1e6 );
       }
 
       // If pion has passed PID nsigma cut
-      if ( TMath::Abs( femtoTrack->nSigmaPion() ) <= 2. ) {
+      if ( nSigmaPionLow <= femtoTrack->nSigmaPion() <= nSigmaPionHigh ) {
         hDedxVsPtPID[1]->Fill( femtoTrack->charge() * femtoTrack->pMom().Pt(),
                                femtoTrack->dEdx() * 1e6 );
       }
 
       // If kaon has passed PID nsigma cut
-      if ( TMath::Abs( femtoTrack->nSigmaKaon() ) <= 2. ) {
+      if ( nSigmaKaonLow <= femtoTrack->nSigmaKaon() <= nSigmaKaonHigh ) {
         hDedxVsPtPID[2]->Fill( femtoTrack->charge() * femtoTrack->pMom().Pt(),
                                femtoTrack->dEdx() * 1e6 );
       }
 
       // If proton has passed PID nsigma cut
-      if ( TMath::Abs( femtoTrack->nSigmaProton() ) <= 2. ) {
+      if ( nSigmaProtonLow <= femtoTrack->nSigmaProton() <= nSigmaProtonHigh ) {
         hDedxVsPtPID[3]->Fill( femtoTrack->charge() * femtoTrack->pMom().Pt(),
                                femtoTrack->dEdx() * 1e6 );
       }
