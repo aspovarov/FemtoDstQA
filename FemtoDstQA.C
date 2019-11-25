@@ -87,18 +87,21 @@ Double_t mZDCSMDCenterwy = 5.19968;
 Int_t mRunIdBins;
 Int_t mRunIdRange[2];
 std::vector<Int_t> badRuns;
-Float_t mCutVtxZ;
-Float_t mCutVtxR;
-Float_t mShiftVtxX;
-Float_t mShiftVtxY;
-Float_t mCutPtH;
-Float_t mCutPtL;
-Float_t mCutNhits;
-Float_t mCutNhitsRatio;
-Float_t mCutEta;
-Float_t mCutDCA;
 
 
+struct FemtoDstCuts {
+	Float_t mCutVtxZ;
+	Float_t mCutVtxR;
+	Float_t mShiftVtxX;
+	Float_t mShiftVtxY;
+	Float_t mCutPtH;
+	Float_t mCutPtL;
+	Float_t mCutNhits;
+	Float_t mCutNhitsRatio;
+	Float_t mCutEta;
+	Float_t mCutDCA;
+
+};
 
 //./14gev/st_physics_15069012_raw_2000008.femtoDst.root
 

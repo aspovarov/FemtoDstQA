@@ -1,0 +1,35 @@
+
+____________________FindBinRuns.cpp____________________
+author: Alexey Povarov <povarovas@gmail.com>
+
+____________________Description of FindBadRuns.cpp____________________
+
+Macro FindBadRuns is addition to FemtoDstQA (free dlc c:) that can be modified to fit your needs or macro. 
+
+This macro finds bad runs and draws comparison of distributions before and after RunQA. FindBadRuns works with TProfiles (example EventProfile, TrackProfile and hSinPhi, hCosPhi from output file FemtoDstQA). Macro contains function GetBadRuns that it calculates standart deviation of content and standart deviation of content error. Then function selects bad runs if they have deviations from mean content or from mean error greater than three standard deviations. GetBadRuns returns std::vector<int> with list of bad runs. Also this function draws comparsion of distributions until and after RunQA if a file with RunQA exist and passed as input.
+
+FindBadRuns takes five input parameters:
+inFileNoRunQA - root file that contain distributions with basical cuts on events and tracks. Selection bad runs not carried out yet.
+inFileRunQA - root file that contain distributions with basical cuts and without bad runs.
+energy - energy of collision for which created distibutions in root files. "energy" can take 7gev, 11gev, 14gev, 19gev, 27gev, 39gev.
+pathPics - path to save pics with comparison.
+format - format of pics ( example png ).
+
+
+____________________Work of FindBadRuns.cpp____________________
+
+Work with FindBadRuns.cpp has two stages:
+
+First stage: You don't have list of bad runs, but you have root file distributions with basical cuts. Then you сould use this macro as follows: 
+
+[myterm]> root
+root [0] .x FindBadRuns.cpp("QAtest14gevCuts.root","","14gev","","")
+
+You will get a list of sorted in the ascending order bad runs.
+
+Second stage: You have two root files, one with basical cuts, other with basical cuts and selection bad runs. You could get comparison of distributions until and after RunQA:
+
+[myterm]> root
+root [0] .x FindBadRuns.cpp("QAtest14gevCuts.root","QAtest14gevRunQA.root","14gev","./","png")
+
+____________________Congratulations!____________________
